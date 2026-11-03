@@ -2,15 +2,11 @@
 import { sb } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
 import { rp, sum, STATUS } from "@/lib/util";
-<<<<<<< HEAD
 import { syncPlanStatuses } from "@/lib/plan";
-=======
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
 
 export default function Planning() {
   const { project, plans, buys, reload } = useApp();
   const items = buys.flatMap((b) => b.purchase_items);
-<<<<<<< HEAD
   const upd = async (id: string, patch: any) => {
     await sb.from("purchase_planning").update(patch).eq("id", id);
     // nama/qty/satuan berubah -> cek ulang apakah sudah ada pembelian yang cocok (status hanya naik, tidak turun)
@@ -20,9 +16,6 @@ export default function Planning() {
     }
     reload();
   };
-=======
-  const upd = async (id: string, patch: any) => { await sb.from("purchase_planning").update(patch).eq("id", id); reload(); };
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
   const add = async () => { await sb.from("purchase_planning").insert({ project_id: project.id, item_name: "Barang baru" }); reload(); };
   const del = async (id: string) => {
     if (!confirm("Hapus rencana ini?")) return;
