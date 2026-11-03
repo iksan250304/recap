@@ -20,17 +20,11 @@ export default function Dashboard() {
   const { project, plans, buys } = useApp();
   const items = buys.flatMap((b) => b.purchase_items);
   const real = sum(items, (i) => +i.subtotal);
-<<<<<<< HEAD
   // rencana belum dibeli = estimasi dikurangi yang sudah terealisasi (rencana "Diproses" = dibeli sebagian)
   const realOf = (n: string) => sum(items.filter((i) => i.item_name.toLowerCase() === n.toLowerCase()), (i) => +i.subtotal);
   const est = sum(
     plans.filter((p) => ["Planned", "Processing"].includes(p.status)),
     (p) => Math.max(0, p.estimated_quantity * p.estimated_unit_price - realOf(p.item_name))
-=======
-  const est = sum(
-    plans.filter((p) => ["Planned", "Processing"].includes(p.status)),
-    (p) => p.estimated_quantity * p.estimated_unit_price
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
   );
   const bg = +project.budget;
   const pct = bg ? (real / bg) * 100 : 0;

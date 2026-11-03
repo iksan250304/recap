@@ -1,5 +1,4 @@
 "use client";
-<<<<<<< HEAD
 import { Fragment, useEffect, useRef, useState } from "react";
 import { sb } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
@@ -32,20 +31,6 @@ export default function ScanModal({ projectId, onClose, onSaved, purchase }: {
       return { id: i.id, item_name: i.item_name, category: i.category, quantity: +i.quantity, unit: i.unit, unit_price: +i.unit_price, plan_id: pl?.id || "", manual: !!pl };
     });
   });
-=======
-import { useEffect, useRef, useState } from "react";
-import { sb } from "@/lib/supabase";
-import Icon from "@/components/Icon";
-import { CATS, compress, rp, sum, toB64, today } from "@/lib/util";
-
-type Item = { item_name: string; category: string; quantity: number; unit: string; unit_price: number };
-type Msg = { type: "err" | "info"; text: string } | null;
-const blank = (): Item => ({ item_name: "", category: "Sipil", quantity: 1, unit: "pcs", unit_price: 0 });
-
-export default function ScanModal({ projectId, onClose, onSaved }: { projectId: string; onClose: () => void; onSaved: () => void }) {
-  const [img, setImg] = useState<Blob | null>(null), [preview, setPreview] = useState(""), [hover, setHover] = useState(false);
-  const [store, setStore] = useState(""), [date, setDate] = useState(today()), [items, setItems] = useState<Item[]>([blank()]);
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
   const [msg, setMsg] = useState<Msg>(null), [ocr, setOcr] = useState(false), [saving, setSaving] = useState(false);
   const [ocrFailed, setOcrFailed] = useState(false);
   const [sec, setSec] = useState(0);
@@ -53,7 +38,6 @@ export default function ScanModal({ projectId, onClose, onSaved }: { projectId: 
   const total = sum(items, (i) => i.quantity * i.unit_price);
   const err = (text: string) => setMsg({ type: "err", text });
 
-<<<<<<< HEAD
   // foto struk yang sudah tersimpan (mode ubah)
   useEffect(() => {
     if (!purchase?.receipt_image_url) return;
@@ -63,8 +47,6 @@ export default function ScanModal({ projectId, onClose, onSaved }: { projectId: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-=======
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
   useEffect(() => {
     if (!ocr) { setSec(0); return; }
     const t = setInterval(() => setSec((x) => x + 1), 1000);
@@ -79,7 +61,6 @@ export default function ScanModal({ projectId, onClose, onSaved }: { projectId: 
     return () => { window.removeEventListener("keydown", k); document.body.style.overflow = prev; };
   }, [onClose, saving]);
 
-<<<<<<< HEAD
   /* ---------- hubungan ke rencana ---------- */
   const othersSet = () => {
     const s = new Set<string>();
@@ -104,8 +85,6 @@ export default function ScanModal({ projectId, onClose, onSaved }: { projectId: 
     });
   };
 
-=======
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
   async function runOcr(b: Blob) {
     setOcr(true); setMsg(null); setOcrFailed(false);
     try {
@@ -119,7 +98,6 @@ export default function ScanModal({ projectId, onClose, onSaved }: { projectId: 
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
       setStore(j.store || ""); if (j.date) setDate(j.date);
-<<<<<<< HEAD
       const mapped: Item[] = j.items?.length ? j.items.map((i: any) => ({
         item_name: i.name || "", category: CATS.includes(i.category) ? i.category : "Lainnya",
         quantity: +i.qty || 1, unit: i.unit || "pcs", unit_price: +i.unit_price || 0, plan_id: "",
@@ -128,13 +106,6 @@ export default function ScanModal({ projectId, onClose, onSaved }: { projectId: 
       setItems(linked);
       const n = linked.filter((i) => i.plan_id).length;
       setMsg({ type: "info", text: "Hasil OCR. Periksa dan koreksi sebelum menyimpan." + (n ? ` ${n} barang cocok dengan Rencana dan dihubungkan otomatis.` : "") });
-=======
-      setItems(j.items?.length ? j.items.map((i: any) => ({
-        item_name: i.name || "", category: CATS.includes(i.category) ? i.category : "Lainnya",
-        quantity: +i.qty || 1, unit: i.unit || "pcs", unit_price: +i.unit_price || 0,
-      })) : [blank()]);
-      setMsg({ type: "info", text: "Hasil OCR. Periksa dan koreksi sebelum menyimpan." });
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
     } catch (e: any) {
       err("OCR gagal: " + (e?.name === "TimeoutError" ? "waktu habis, koneksi lambat" : e?.message || "tidak diketahui") + ". Coba lagi atau isi manual.");
       setOcrFailed(true);
@@ -145,7 +116,6 @@ export default function ScanModal({ projectId, onClose, onSaved }: { projectId: 
   async function pick(f?: File) {
     if (!f?.type.startsWith("image/")) return err("Pilih berkas gambar (JPG/PNG).");
     const b = await compress(f); setImg(b); setPreview(URL.createObjectURL(b));
-<<<<<<< HEAD
     if (!edit) await runOcr(b); // mode ubah: hanya ganti foto, data tidak ditimpa
   }
 
@@ -256,56 +226,19 @@ export default function ScanModal({ projectId, onClose, onSaved }: { projectId: 
     );
   };
 
-=======
-    await runOcr(b);
-  }
-  const set = (x: number, k: keyof Item, v: any) =>
-    setItems((a) => a.map((it, i) => (i === x ? { ...it, [k]: ["quantity", "unit_price"].includes(k) ? +v || 0 : v } : it)));
-  const del = (x: number) => setItems((a) => (a.length > 1 ? a.filter((_, i) => i !== x) : [blank()]));
-
-  async function save() {
-    if (!store.trim() || !items.some((i) => i.item_name.trim())) return err("Isi nama toko dan minimal 1 barang.");
-    setSaving(true); setMsg(null);
-    const { data: u } = await sb.auth.getUser();
-    let path: string | null = null;
-    if (img) {
-      path = `${u.user!.id}/${crypto.randomUUID()}.jpg`;
-      const up = await sb.storage.from("receipts").upload(path, img, { contentType: "image/jpeg" });
-      if (up.error) { setSaving(false); return err("Upload gagal: " + up.error.message); }
-    }
-    const { data: p, error } = await sb.from("actual_purchases")
-      .insert({ project_id: projectId, store_name: store, purchase_date: date, total_amount: total, receipt_image_url: path }).select().single();
-    if (error) { setSaving(false); return err(error.message); }
-    const { error: e2 } = await sb.from("purchase_items")
-      .insert(items.filter((i) => i.item_name.trim()).map((i) => ({ ...i, purchase_id: p.id })));
-    setSaving(false);
-    if (e2) return err(e2.message);
-    onSaved(); onClose();
-  }
-
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
   return (
     <>
       <div className="backdrop" onClick={() => !saving && onClose()} />
       <div
-<<<<<<< HEAD
         role="dialog" aria-modal aria-label={edit ? "Ubah pembelian" : "Tambah pembelian"}
-=======
-        role="dialog" aria-modal aria-label="Tambah pembelian"
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
         className="fixed inset-x-0 bottom-0 z-50 flex h-[94dvh] flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl animate-sheet-up
           md:inset-auto md:left-1/2 md:top-1/2 md:h-auto md:max-h-[92dvh] md:w-[min(64rem,calc(100vw-2rem))] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-3xl"
       >
         {/* header */}
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
-<<<<<<< HEAD
             <h2 className="text-lg font-bold tracking-tight">{edit ? "Ubah pembelian" : "Tambah pembelian"}</h2>
             <p className="text-xs text-slate-500">{edit ? "Ubah data nota, lalu simpan perubahan." : "Scan struk atau isi manual."}</p>
-=======
-            <h2 className="text-lg font-bold tracking-tight">Tambah pembelian</h2>
-            <p className="text-xs text-slate-500">Scan struk atau isi manual.</p>
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
           </div>
           <button className="btn-ghost !min-h-0 !p-2" onClick={onClose} disabled={saving} aria-label="Tutup">
             <Icon n="x" />
@@ -335,11 +268,7 @@ export default function ScanModal({ projectId, onClose, onSaved }: { projectId: 
                 onDrop={(e) => { e.preventDefault(); setHover(false); pick(e.dataTransfer.files[0]); }}
                 className={`rounded-2xl border-2 border-dashed p-5 text-center transition ${hover ? "border-amber-400 bg-amber-50" : "border-slate-300 bg-slate-50/60"}`}
               >
-<<<<<<< HEAD
                 <p className="mb-1 hidden text-sm text-slate-500 md:block">Tarik dan lepas struk di sini, atau pilih:</p>
-=======
-                <p className="mb-4 hidden text-sm text-slate-500 md:block">Tarik dan lepas struk di sini, atau pilih:</p>
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
                 <p className="mb-3 text-[11px] text-slate-400">Tips: foto satu struk saja, tegak, cahaya terang.</p>
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-1">
                   <button className="btn-p" onClick={() => cam.current?.click()}>Ambil foto</button>
@@ -400,10 +329,7 @@ export default function ScanModal({ projectId, onClose, onSaved }: { projectId: 
                     <div className="min-w-0 flex-1"><label className="lbl">Harga satuan</label><input className="inp w-full" type="number" inputMode="numeric" value={it.unit_price} onChange={(e) => set(x, "unit_price", e.target.value)} /></div>
                     <div className="pb-2.5 text-right font-bold tabular-nums">{rp(it.quantity * it.unit_price)}</div>
                   </div>
-<<<<<<< HEAD
                   {plans?.length ? <div><label className="lbl">Rencana terkait</label>{planField(it, x)}</div> : null}
-=======
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
                 </div>
               ))}
             </div>
@@ -414,7 +340,6 @@ export default function ScanModal({ projectId, onClose, onSaved }: { projectId: 
                 <thead><tr><th>Barang</th><th>Kategori</th><th>Qty</th><th>Sat.</th><th>Harga</th><th className="text-right">Subtotal</th><th /></tr></thead>
                 <tbody>
                   {items.map((it, x) => (
-<<<<<<< HEAD
                     <Fragment key={x}>
                       <tr>
                         <td><input className="cell min-w-32" placeholder="Nama barang" value={it.item_name} onChange={(e) => set(x, "item_name", e.target.value)} /></td>
@@ -436,30 +361,16 @@ export default function ScanModal({ projectId, onClose, onSaved }: { projectId: 
                         </tr>
                       ) : null}
                     </Fragment>
-=======
-                    <tr key={x}>
-                      <td><input className="cell min-w-32" placeholder="Nama barang" value={it.item_name} onChange={(e) => set(x, "item_name", e.target.value)} /></td>
-                      <td><select className="cell" value={it.category} onChange={(e) => set(x, "category", e.target.value)}>{CATS.map((c) => <option key={c}>{c}</option>)}</select></td>
-                      <td className="w-20"><input className="cell" type="number" step="any" value={it.quantity} onChange={(e) => set(x, "quantity", e.target.value)} /></td>
-                      <td className="w-16"><input className="cell" value={it.unit} onChange={(e) => set(x, "unit", e.target.value)} /></td>
-                      <td className="w-28"><input className="cell" type="number" value={it.unit_price} onChange={(e) => set(x, "unit_price", e.target.value)} /></td>
-                      <td className="whitespace-nowrap text-right font-medium">{rp(it.quantity * it.unit_price)}</td>
-                      <td className="w-10"><button className="btn-ghost !min-h-0 !px-2.5 !py-1 text-rose-500 hover:!bg-rose-50" onClick={() => del(x)} aria-label="Hapus baris">Hapus</button></td>
-                    </tr>
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
                   ))}
                 </tbody>
               </table>
             </div>
-<<<<<<< HEAD
 
             {edit && (
               <div className="border-t border-slate-100 pt-4">
                 <button className="btn-danger w-full" onClick={remove} disabled={saving}>Hapus pembelian ini</button>
               </div>
             )}
-=======
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
           </div>
         </div>
 
@@ -473,11 +384,7 @@ export default function ScanModal({ projectId, onClose, onSaved }: { projectId: 
             <div className="text-lg font-bold tabular-nums">{rp(total)}</div>
           </div>
           <button className="btn" onClick={onClose} disabled={saving}>Batal</button>
-<<<<<<< HEAD
           <button className="btn-p min-w-28" disabled={saving || ocr} onClick={save}>{saving ? "Menyimpan…" : edit ? "Simpan perubahan" : "Simpan"}</button>
-=======
-          <button className="btn-p min-w-28" disabled={saving || ocr} onClick={save}>{saving ? "Menyimpan…" : "Simpan"}</button>
->>>>>>> f3a67b5c50398de2a7f5a10d44f28d931d8942c8
         </div>
       </div>
     </>
