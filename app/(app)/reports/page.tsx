@@ -2,60 +2,78 @@
 import { useMemo, useState } from "react";
 import { sb } from "@/lib/supabase";
 import { useApp } from "@/lib/ctx";
-import { CATS, STATUS, download, rp, sum } from "@/lib/util";
+import { CATS, download, rp, sum } from "@/lib/util";
+import { buildExcel, buildPdf, fmtDate, type PdfMode, type Rcp } from "@/lib/report";
 
 const EMPTY = { from: "", to: "", cat: "", store: "" };
+const MODES: [PdfMode, string][] = [
+  ["laporan", "Laporan saja (tanpa struk)"],
+  ["lampiran", "Laporan + lampiran struk"],
+  ["struk", "Struk saja (PDF terpisah)"],
+];
 
 export default function Reports() {
   const { project, plans, buys } = useApp();
-  const [f, setF] = useState(EMPTY), [busy, setBusy] = useState("");
+  const [f, setF] = useState(EMPTY), [busy, setBusy] = useState(""), [mode, setMode] = useState<PdfMode>("laporan");
   const rows = useMemo(() => buys
     .filter((b) => (!f.from || b.purchase_date >= f.from) && (!f.to || b.purchase_date <= f.to) && (!f.store || b.store_name.toLowerCase().includes(f.store.toLowerCase())))
     .flatMap((b) => b.purchase_items.filter((i: any) => !f.cat || i.category === f.cat)
       .map((i: any) => ({ ...i, date: b.purchase_date, store: b.store_name, receipt: b.receipt_image_url }))), [buys, f]);
   const total = sum(rows, (r) => +r.subtotal);
   const filtered = !!(f.from || f.to || f.cat || f.store);
+  const receiptPaths = useMemo(() => [...new Set(rows.map((r) => r.receipt).filter(Boolean))] as string[], [rows]);
+
+  const period = [
+    f.from || f.to ? `Periode ${f.from ? fmtDate(f.from) : "awal"} s/d ${f.to ? fmtDate(f.to) : "sekarang"}` : "Semua tanggal",
+    f.cat && `Kategori: ${f.cat}`,
+    f.store && `Toko: ${f.store}`,
+  ].filter(Boolean).join("  ·  ");
 
   async function excel() {
     setBusy("xlsx");
-    const ExcelJS = (await import("exceljs")).default, wb = new ExcelJS.Workbook();
-    const hdr = (ws: any) => { ws.getRow(1).font = { bold: true }; ws.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFDE68A" } }; };
-    const s = wb.addWorksheet("Ringkasan"), a = wb.addWorksheet("Rencana"), b = wb.addWorksheet("Realisasi");
-    a.addRow(["Barang", "Qty", "Satuan", "Harga Est.", "Estimasi", "Status"]); hdr(a);
-    plans.forEach((p, i) => a.addRow([p.item_name, +p.estimated_quantity, p.unit, +p.estimated_unit_price,
-      { formula: `B${i + 2}*D${i + 2}`, result: p.estimated_quantity * p.estimated_unit_price }, STATUS[p.status]]));
-    a.addRow(["TOTAL", "", "", "", { formula: `SUM(E2:E${plans.length + 1})` }]);
-    b.addRow(["Tanggal", "Toko", "Barang", "Kategori", "Qty", "Satuan", "Harga", "Subtotal"]); hdr(b);
-    rows.forEach((r, i) => b.addRow([r.date, r.store, r.item_name, r.category, +r.quantity, r.unit, +r.unit_price,
-      { formula: `E${i + 2}*G${i + 2}`, result: +r.subtotal }]));
-    b.addRow(["TOTAL", "", "", "", "", "", "", { formula: `SUM(H2:H${rows.length + 1})` }]);
-    [a.getColumn(4), a.getColumn(5), b.getColumn(7), b.getColumn(8)].forEach((c) => (c.numFmt = '"Rp" #,##0'));
-    [a, b].forEach((w) => w.columns.forEach((c: any) => (c.width = 18)));
-    s.addRows([["Proyek", project.name], ["Anggaran", +project.budget], ["Estimasi rencana", { formula: `Rencana!E${plans.length + 2}` }],
-      ["Realisasi", { formula: `Realisasi!H${rows.length + 2}` }], ["Sisa anggaran", { formula: "B2-B4" }]]);
-    s.getColumn(1).width = 20; s.getColumn(2).width = 24; s.getColumn(2).numFmt = '"Rp" #,##0'; s.getColumn(1).font = { bold: true };
-    download(await wb.xlsx.writeBuffer(), `laporan-${project.name}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    try {
+      const ExcelJS = (await import("exceljs")).default;
+      const allItems = buys.flatMap((b) => b.purchase_items);
+      const buf = await buildExcel(ExcelJS, { project, plans, allItems, rows, period });
+      download(buf, `laporan-${project.name}.xlsx`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    } catch (e: any) {
+      alert("Gagal membuat Excel: " + (e?.message || e));
+    }
     setBusy("");
   }
 
+  async function loadReceipts(paths: string[]): Promise<Rcp[]> {
+    const got = await Promise.all(paths.map(async (path) => {
+      try {
+        const { data } = await sb.storage.from("receipts").createSignedUrl(path, 180);
+        if (!data) return null;
+        const blob = await (await fetch(data.signedUrl)).blob();
+        const url = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
+        const bm = await createImageBitmap(blob);
+        return { path, data: url, w: bm.width, h: bm.height } as Rcp;
+      } catch { return null; }
+    }));
+    return got.filter(Boolean) as Rcp[];
+  }
+
   async function pdf() {
+    if (mode !== "laporan" && !receiptPaths.length) return alert("Tidak ada foto struk pada data yang difilter.");
     setBusy("pdf");
-    const { jsPDF } = await import("jspdf"), autoTable = (await import("jspdf-autotable")).default, doc = new jsPDF();
-    doc.setFontSize(14); doc.text(`Laporan Pembelian – ${project.name}`, 14, 16);
-    doc.setFontSize(10); doc.text(`Anggaran: ${rp(project.budget)}   Realisasi: ${rp(total)}   Sisa: ${rp(project.budget - total)}`, 14, 23);
-    autoTable(doc, {
-      startY: 28, head: [["Tanggal", "Toko", "Barang", "Kategori", "Qty", "Harga", "Subtotal"]], styles: { fontSize: 8 }, headStyles: { fillColor: [245, 158, 11], textColor: 20 },
-      body: rows.map((r) => [r.date, r.store, r.item_name, r.category, `${r.quantity} ${r.unit}`, rp(r.unit_price), rp(r.subtotal)]),
-      foot: [["", "", "", "", "", "Total", rp(total)]],
-    });
-    for (const path of [...new Set(rows.map((r) => r.receipt).filter(Boolean))] as string[]) {
-      const { data } = await sb.storage.from("receipts").createSignedUrl(path, 120); if (!data) continue;
-      const blob = await (await fetch(data.signedUrl)).blob();
-      const url = await new Promise<string>((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result as string); fr.readAsDataURL(blob); });
-      const bm = await createImageBitmap(blob), w = 180, h = Math.min(260, (bm.height / bm.width) * w);
-      doc.addPage(); doc.setFontSize(9); doc.text(`Lampiran struk – ${rows.find((r) => r.receipt === path)?.store}`, 14, 12); doc.addImage(url, "JPEG", 14, 16, w, h);
+    try {
+      const { jsPDF } = await import("jspdf"), autoTable = (await import("jspdf-autotable")).default;
+      const receipts = mode === "laporan" ? [] : await loadReceipts(receiptPaths);
+      if (mode === "struk" && !receipts.length) throw new Error("foto struk tidak bisa dimuat");
+      const doc = buildPdf(jsPDF, autoTable, {
+        project, rows, period, mode, receipts,
+        metaOf: (path) => buys.find((b) => b.receipt_image_url === path),
+      });
+      doc.save(`${mode === "struk" ? "struk" : "laporan"}-${project.name}.pdf`);
+      if (mode === "lampiran" && receipts.length < receiptPaths.length)
+        alert(`${receiptPaths.length - receipts.length} foto struk gagal dimuat dan tidak disertakan.`);
+    } catch (e: any) {
+      alert("Gagal membuat PDF: " + (e?.message || e));
     }
-    doc.save(`laporan-${project.name}.pdf`); setBusy("");
+    setBusy("");
   }
 
   return (
@@ -88,12 +106,24 @@ export default function Reports() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+        <div className="border-t border-slate-100 pt-4">
+          <label className="lbl" htmlFor="pdfmode">Isi file PDF</label>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select id="pdfmode" className="inp w-full sm:w-72" value={mode} onChange={(e) => setMode(e.target.value as PdfMode)}>
+              {MODES.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
+            </select>
+            <span className="text-xs text-slate-500">
+              {receiptPaths.length} foto struk tersedia pada data ini
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           <button className="btn-p flex-1 sm:flex-none" disabled={!!busy} onClick={excel}>
             {busy === "xlsx" ? "Menyiapkan…" : "Ekspor Excel"}
           </button>
           <button className="btn flex-1 sm:flex-none" disabled={!!busy} onClick={pdf}>
-            {busy === "pdf" ? "Menyiapkan…" : "Ekspor PDF"}
+            {busy === "pdf" ? "Menyiapkan…" : mode === "struk" ? "Unduh Struk (PDF)" : "Ekspor PDF"}
           </button>
           {filtered && (
             <button className="btn-ghost sm:ml-auto" onClick={() => setF(EMPTY)}>
