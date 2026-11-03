@@ -1,0 +1,14 @@
+# dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# next.js build output
+/.next/
+/out/
+
+# debug logs & temp
+*.log
+.expo/
+.env*.local
+.env
